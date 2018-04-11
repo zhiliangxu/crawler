@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	simplejson "github.com/bitly/go-simplejson"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/bitly/go-simplejson"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ func fetch_and_search(url string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Println("error: get content error: url: " + url)
+		return
 	}
 	defer resp.Body.Close()
 	resp_content, err := ioutil.ReadAll(resp.Body)
@@ -34,7 +36,7 @@ func fetch_and_search(url string) {
 		tmp_substr2 := resp_content_str[pos_begin : len(resp_content_str)-1]
 		pos_end := strings.Index(tmp_substr2, "\"")
 		ans := resp_content_str[pos_begin : pos_begin+pos_end]
-		if !strings.HasPrefix(ans, "https://") { //exclude some annoying link
+		if !strings.HasPrefix(ans, "https://") && !strings.HasPrefix(ans, "/") { //exclude some annoying link
 			fmt.Println("ans: " + ans)
 			tmp_pos := strings.Index(ans, "?")
 			filename := ans[:tmp_pos]
@@ -45,7 +47,7 @@ func fetch_and_search(url string) {
 				fmt.Println("log: filename map added: " + filename)
 				modify_and_save(resp_content_str, filename)
 
-				go fetch_and_search("https://docs.microsoft.com/en-us/dotnet/api/" + filename)
+				fetch_and_search("https://docs.microsoft.com/en-us/dotnet/api/" + filename)
 
 			} else {
 				fmt.Println("log: filename map exist: " + filename)
@@ -64,8 +66,22 @@ func modify_and_save(content string, name string) {
 	content = strings.Replace(content, "?view=azure-dotnet", ".html", -1) // link structure
 	content = strings.Replace(content, m_str1, m_str2, -1)                // js relative link correction
 	content = strings.Replace(content, m_str3, m_str4, -1)                // css relative link correction
+
+	r := strings.NewReader(content)
+	g, err := goquery.NewDocumentFromReader(r)
+	if err != nil {
+		fmt.Println("error: delete html node error")
+	}
+	g.Find("div.header-holder").Remove()
+	g.Find("div.sidebar").Remove()
+	g.Find("footer#footer").Remove()
+	content, err = g.Html()
+	if err != nil {
+		fmt.Println("error: convert html node to string")
+	}
+
 	tmp := []byte(content)
-	err := ioutil.WriteFile(name+".html", tmp, 777)
+	err = ioutil.WriteFile(name+".html", tmp, 777)
 	if err != nil {
 		fmt.Println("error: save file error. filename: " + name)
 	}
